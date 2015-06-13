@@ -9,6 +9,8 @@
 #include <memory>
 #include <stdexcept>
 
+// Memory management: we use shared pointers for PyObjects
+
 /**
  * A managed pointer to PyObject which takes care about
  * memory management and reference counting.
@@ -22,7 +24,6 @@
  */
 typedef std::shared_ptr<PyObject> PyObjectPtr;
 
-
 /**
  * This deleter should be used when managing PyObject with
  * std::shared_ptr
@@ -35,6 +36,10 @@ struct PyObjectDeleter
     }
 };
 
+/**
+ * Make a managed PyObject that will be automatically deleted with the last
+ * reference.
+ */
 PyObjectPtr makePyObjectPtr(PyObject* p)
 {
     return PyObjectPtr(p, PyObjectDeleter());
