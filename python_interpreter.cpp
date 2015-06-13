@@ -88,6 +88,82 @@ PyObjectPtr getAttribute(PyObjectPtr obj, const std::string attribute)
     return pyAttr;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//////////////////////// Type conversions //////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+bool toVector(PyObjectPtr obj, std::vector<double>& result)
+{
+    // TODO check whether obj is a numpy array or list
+    bool knownType = true;
+
+    if(PyArray_Check(obj.get()))
+    {
+        Py_ssize_t size = PyArray_Size(obj.get());
+        result.resize(size);
+
+        // TODO we are not sure whether the data is contiguous, use iterator:
+        // http://docs.scipy.org/doc/numpy/reference/c-api.array.html#data-access
+        double* data = (double *)PyArray_DATA(obj.get());
+        for(Py_ssize_t i = 0; i < size; i++)
+            result[i] = data[i];
+    }
+    else if(PyList_Check(obj.get()))
+    {
+        Py_ssize_t size = PyList_Size(obj.get());
+        result.resize(size);
+
+        for(Py_ssize_t i = 0; i < size; i++)
+        {
+            // Borrowed reference
+            PyObject* item = PyList_GetItem(obj.get(), i);
+            if(!PyFloat_Check(item))
+                throw std::runtime_error(
+                    "List object contains item that is not a double at index "
+                    + std::to_string(i));
+            const double extractedItem = PyFloat_AsDouble(item);
+            if(PyErr_Occurred())
+            {
+                PyErr_Print();
+                throw std::runtime_error(
+                    "List object contains item that cannot be converted to "
+                    "double at index " + std::to_string(i));
+            }
+            result[i] = extractedItem;
+        }
+    }
+    else if(PyTuple_Check(obj.get()))
+    {
+        Py_ssize_t size = PyTuple_Size(obj.get());
+        result.resize(size);
+
+        for(Py_ssize_t i = 0; i < size; i++)
+        {
+            // Borrowed reference
+            PyObject* item = PyTuple_GetItem(obj.get(), i);
+            if(!PyFloat_Check(item))
+                throw std::runtime_error(
+                    "Tuple object contains item that is not a double at index "
+                    + std::to_string(i));
+            const double extractedItem = PyFloat_AsDouble(item);
+            if(PyErr_Occurred())
+            {
+                PyErr_Print();
+                throw std::runtime_error(
+                    "Tuple object contains item that cannot be converted to "
+                    "double at index " + std::to_string(i));
+            }
+            result[i] = extractedItem;
+        }
+    }
+    else
+    {
+        knownType = false;
+    }
+
+    return knownType;
+}
+
 PythonInterpreter::PythonInterpreter()
 {
     if(!Py_IsInitialized())
@@ -152,30 +228,16 @@ std::vector<double> PythonInterpreter::callReturnFunction(
     PyObjectPtr result = makePyObjectPtr(
         PyObject_CallFunction(pyFunc.get(), (char*)""));
 
-    std::vector<double> array;
-    // TODO check whether result is a numpy array or list
-
-    const bool isArray = PyArray_Check(result.get());
-    if(isArray)
-    {
-        int size = PyArray_SIZE(result.get());
-        array.resize(size);
-
-        // TODO we are not sure whether the data is contiguous, use iterator:
-        // http://docs.scipy.org/doc/numpy/reference/c-api.array.html#data-access
-        double* data = (double *)PyArray_DATA(result.get());
-        for(unsigned i = 0; i < size; i++)
-            array[i] = data[i];
-    }
-    else
-    {
-        throw std::runtime_error("Unknown Python object type");
-    }
-
     if(PyErr_Occurred()) {
         PyErr_Print();
         throw std::runtime_error("Error calling " + function);
     }
+
+    std::vector<double> array;
+    const bool knownType = toVector(result, array);
+    if(!knownType)
+        throw std::runtime_error(function + " does not return a sequence of "
+                                 "doubles");
 
     return array;
 }
