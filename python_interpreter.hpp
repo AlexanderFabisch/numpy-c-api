@@ -14,9 +14,9 @@ typedef _object PyObject;
  * A managed pointer to PyObject which takes care about
  * memory management and reference counting.
  *
- * \note Reference counting only works if Helper::makePyObjectPtr()
- *       is used to create the pointer. Therefore you should always
- *       use Helper::makePyObjectPtr() to create new PyObjectPtrs.
+ * \note Reference counting only works if makePyObjectPtr() is used to create
+ *       the pointer. Therefore you should always use makePyObjectPtr() to
+ *       create new PyObjectPtrs.
  *
  * \note This type should only be used to encapsulate PyObjects that are
  *       'new references'. Wrapping a 'borrowed reference' will break Python.
