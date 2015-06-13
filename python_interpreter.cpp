@@ -50,7 +50,8 @@ PyObjectPtr PythonInterpreter::create1dBuffer(
   //FIXME Python expects sizeof(double) == 8.
   npy_intp dims[1] = {size};
   //FIXME not sure if dims should be stack allocated
-  return makePyObjectPtr(PyArray_SimpleNewFromData(1, &dims[0], NPY_DOUBLE, (void*) array));
+  return makePyObjectPtr(
+      PyArray_SimpleNewFromData(1, &dims[0], NPY_DOUBLE, (void*) array));
 }
 
 PyObjectPtr PythonInterpreter::createPyString(const std::string& str) const
@@ -99,15 +100,13 @@ void PythonInterpreter::callFunction(
 
     PyObjectPtr memView = create1dBuffer(&array[0], array.size());
 
-    PyObject* result = PyObject_CallFunction(
-        pyFunc.get(), (char*)"O", memView.get());
+    PyObjectPtr result = makePyObjectPtr(
+        PyObject_CallFunction(pyFunc.get(), (char*)"O", memView.get()));
 
     if(PyErr_Occurred()) {
         PyErr_Print();
         throw std::runtime_error("Error calling " + function);
     }
-
-    Py_XDECREF(result);
 }
 
 void PythonInterpreter::callFunction(
@@ -117,12 +116,40 @@ void PythonInterpreter::callFunction(
     PyObjectPtr pyModule = importModule(pyModuleString);
     PyObjectPtr pyFunc = getAttribute(pyModule, function);
 
-    PyObject* result = PyObject_CallFunction(pyFunc.get(), (char*)"");
+    PyObjectPtr result = makePyObjectPtr(
+        PyObject_CallFunction(pyFunc.get(), (char*)""));
+
+    if(PyErr_Occurred()) {
+        PyErr_Print();
+        throw std::runtime_error("Error calling " + function);
+    }
+}
+
+std::vector<double> PythonInterpreter::callReturnFunction(
+    const std::string& module, const std::string& function) const
+{
+    PyObjectPtr pyModuleString = createPyString(module);
+    PyObjectPtr pyModule = importModule(pyModuleString);
+    PyObjectPtr pyFunc = getAttribute(pyModule, function);
+
+    PyObjectPtr result = makePyObjectPtr(
+        PyObject_CallFunction(pyFunc.get(), (char*)""));
+
+    // TODO check whether result is a numpy array or list
+
+    int size = PyArray_SIZE(result.get());
+    std::vector<double> array(size);
+
+    // TODO we are not sure whether the data is contiguous, use iterator:
+    // http://docs.scipy.org/doc/numpy/reference/c-api.array.html#data-access
+    double* data = (double *)PyArray_DATA(result.get());
+    for(unsigned i = 0; i < size; i++)
+        array[i] = data[i];
 
     if(PyErr_Occurred()) {
         PyErr_Print();
         throw std::runtime_error("Error calling " + function);
     }
 
-    Py_XDECREF(result);
+    return array;
 }
