@@ -6,7 +6,30 @@
 #include <numpy/arrayobject.h>
 
 #include <python_interpreter.hpp>
+#include <memory>
 #include <stdexcept>
+
+
+// Forward declare PyObject as suggested on the python mailing list
+// http://mail.python.org/pipermail/python-dev/2003-August/037601.html
+#ifndef PyObject_HEAD
+struct _object;
+typedef _object PyObject;
+#endif
+
+/**
+ * A managed pointer to PyObject which takes care about
+ * memory management and reference counting.
+ *
+ * \note Reference counting only works if makePyObjectPtr() is used to create
+ *       the pointer. Therefore you should always use makePyObjectPtr() to
+ *       create new PyObjectPtrs.
+ *
+ * \note This type should only be used to encapsulate PyObjects that are
+ *       'new references'. Wrapping a 'borrowed reference' will break Python.
+ */
+typedef std::shared_ptr<PyObject> PyObjectPtr;
+
 
 /**
  * This deleter should be used when managing PyObject with
@@ -23,6 +46,49 @@ struct PyObjectDeleter
 PyObjectPtr makePyObjectPtr(PyObject* p)
 {
     return PyObjectPtr(p, PyObjectDeleter());
+}
+
+PyObjectPtr create1dBuffer(double* array, unsigned size)
+{
+  //FIXME Python expects sizeof(double) == 8.
+  npy_intp dims[1] = {size};
+  //FIXME not sure if dims should be stack allocated
+  return makePyObjectPtr(
+      PyArray_SimpleNewFromData(1, &dims[0], NPY_DOUBLE, (void*) array));
+}
+
+PyObjectPtr createPyString(const std::string& str)
+{
+  PyObjectPtr pyStr = makePyObjectPtr(PyString_FromString(str.c_str()));
+  if(!pyStr)
+  {
+    PyErr_Print();
+    throw std::runtime_error("unable to create PyString");
+  }
+  return pyStr;
+}
+
+PyObjectPtr importModule(const PyObjectPtr& module)
+{
+  PyObjectPtr pyModule = makePyObjectPtr(PyImport_Import(module.get()));
+  if(!pyModule)
+  {
+    PyErr_Print();
+    throw std::runtime_error("unable to load module");
+  }
+  return pyModule;
+}
+
+PyObjectPtr getAttribute(PyObjectPtr obj, const std::string attribute)
+{
+    PyObjectPtr pyAttr = makePyObjectPtr(PyObject_GetAttrString(
+        obj.get(), attribute.c_str()));
+    if(!pyAttr)
+    {
+        PyErr_Print();
+        throw std::runtime_error("unable to load python attribute");
+    }
+    return pyAttr;
 }
 
 PythonInterpreter::PythonInterpreter()
@@ -42,52 +108,6 @@ const PythonInterpreter& PythonInterpreter::instance()
 {
     static PythonInterpreter pythonInterpreter;
     return pythonInterpreter;
-}
-
-PyObjectPtr PythonInterpreter::create1dBuffer(
-    double* array, unsigned size) const
-{
-  //FIXME Python expects sizeof(double) == 8.
-  npy_intp dims[1] = {size};
-  //FIXME not sure if dims should be stack allocated
-  return makePyObjectPtr(
-      PyArray_SimpleNewFromData(1, &dims[0], NPY_DOUBLE, (void*) array));
-}
-
-PyObjectPtr PythonInterpreter::createPyString(const std::string& str) const
-{
-  PyObjectPtr pyStr = makePyObjectPtr(PyString_FromString(str.c_str()));
-  if(!pyStr)
-  {
-    PyErr_Print();
-    throw std::runtime_error("unable to create PyString");
-  }
-  return pyStr;
-}
-
-PyObjectPtr PythonInterpreter::importModule(
-    const PyObjectPtr& module) const
-{
-  PyObjectPtr pyModule = makePyObjectPtr(PyImport_Import(module.get()));
-  if(!pyModule)
-  {
-    PyErr_Print();
-    throw std::runtime_error("unable to load module");
-  }
-  return pyModule;
-}
-
-PyObjectPtr PythonInterpreter::getAttribute(
-    PyObjectPtr obj, const std::string attribute) const
-{
-    PyObjectPtr pyAttr = makePyObjectPtr(PyObject_GetAttrString(
-        obj.get(), attribute.c_str()));
-    if(!pyAttr)
-    {
-        PyErr_Print();
-        throw std::runtime_error("unable to load python attribute");
-    }
-    return pyAttr;
 }
 
 void PythonInterpreter::callFunction(
