@@ -1,5 +1,7 @@
 import numpy as np
 
+def hello_world():
+    print("Hello world")
 
 def take_array(a):
     print(a)

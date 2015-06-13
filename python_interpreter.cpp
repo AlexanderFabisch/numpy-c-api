@@ -1,4 +1,8 @@
-#include <Python.h> // Must be included before anything else to avoid warnings
+// Since Python may define some pre-processor definitions which affect the
+// standard headers on some systems, you must include Python.h before any
+// standard headers are included.
+// (See https://docs.python.org/2.7/c-api/intro.html#include-files)
+#include <Python.h>
 #include <numpy/arrayobject.h>
 
 #include <python_interpreter.hpp>
@@ -15,6 +19,11 @@ struct PyObjectDeleter
         Py_XDECREF(p);
     }
 };
+
+PyObjectPtr makePyObjectPtr(PyObject* p)
+{
+    return PyObjectPtr(p, PyObjectDeleter());
+}
 
 PythonInterpreter::PythonInterpreter()
 {
@@ -67,15 +76,11 @@ PyObjectPtr PythonInterpreter::importModule(
   return pyModule;
 }
 
-PyObjectPtr PythonInterpreter::makePyObjectPtr(PyObject* p) const
-{
-    return PyObjectPtr(p, PyObjectDeleter());
-}
-
 PyObjectPtr PythonInterpreter::getAttribute(
-    PyObject* obj, const std::string attribute) const
+    PyObjectPtr obj, const std::string attribute) const
 {
-    PyObjectPtr pyAttr = makePyObjectPtr(PyObject_GetAttrString(obj, attribute.c_str()));
+    PyObjectPtr pyAttr = makePyObjectPtr(PyObject_GetAttrString(
+        obj.get(), attribute.c_str()));
     if(!pyAttr)
     {
         PyErr_Print();
@@ -90,12 +95,29 @@ void PythonInterpreter::callFunction(
 {
     PyObjectPtr pyModuleString = createPyString(module);
     PyObjectPtr pyModule = importModule(pyModuleString);
-    PyObjectPtr pyFunc = getAttribute(pyModule.get(), function);
+    PyObjectPtr pyFunc = getAttribute(pyModule, function);
 
     PyObjectPtr memView = create1dBuffer(&array[0], array.size());
 
-    PyObject* result = PyEval_CallFunction(
+    PyObject* result = PyObject_CallFunction(
         pyFunc.get(), (char*)"O", memView.get());
+
+    if(PyErr_Occurred()) {
+        PyErr_Print();
+        throw std::runtime_error("Error calling " + function);
+    }
+
+    Py_XDECREF(result);
+}
+
+void PythonInterpreter::callFunction(
+    const std::string& module, const std::string& function) const
+{
+    PyObjectPtr pyModuleString = createPyString(module);
+    PyObjectPtr pyModule = importModule(pyModuleString);
+    PyObjectPtr pyFunc = getAttribute(pyModule, function);
+
+    PyObject* result = PyObject_CallFunction(pyFunc.get(), (char*)"");
 
     if(PyErr_Occurred()) {
         PyErr_Print();

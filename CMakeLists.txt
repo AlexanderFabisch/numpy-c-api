@@ -11,10 +11,10 @@ include_directories(${NUMPY_INCLUDE_DIRS})
 include_directories(.)
 link_directories(${PYTHON_LIBRARY_DIRS})
 
-add_executable(copy_numpy_array copy_numpy_array.cpp python_interpreter.cpp)
-target_link_libraries(
-    copy_numpy_array
-    ${EXTRA_LIBRARIES}
-    ${PYTHON_LIBRARIES})
-
 file(COPY functions.py DESTINATION .)
+
+add_executable(copy_numpy_array copy_numpy_array.cpp python_interpreter.cpp)
+target_link_libraries(copy_numpy_array ${PYTHON_LIBRARIES})
+
+add_executable(hello_world hello_world.cpp python_interpreter.cpp)
+target_link_libraries(hello_world ${PYTHON_LIBRARIES})

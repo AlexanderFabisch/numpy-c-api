@@ -34,10 +34,11 @@ public:
     PyObjectPtr create1dBuffer(double* array, unsigned size) const;
     PyObjectPtr createPyString(const std::string& str) const;
     PyObjectPtr importModule(const PyObjectPtr& module) const;
-    PyObjectPtr getAttribute(PyObject* obj,
+    PyObjectPtr getAttribute(PyObjectPtr obj,
                              const std::string attribute) const;
-    PyObjectPtr makePyObjectPtr(PyObject* p) const;
     void callFunction(const std::string& module,
                       const std::string& function,
                       std::vector<double>& array) const;
+    void callFunction(const std::string& module,
+                      const std::string& function) const;
 };
