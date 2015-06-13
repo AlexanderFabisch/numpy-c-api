@@ -94,14 +94,13 @@ void PythonInterpreter::callFunction(
 
     PyObjectPtr memView = create1dBuffer(&array[0], array.size());
 
-    PyObjectPtr result = PyEval_CallFunction(
+    PyObject* result = PyEval_CallFunction(
         pyFunc.get(), (char*)"O", memView.get());
-    // TODO
 
-    /*if(PyErr_Occurred()) {
+    if(PyErr_Occurred()) {
         PyErr_Print();
         throw std::runtime_error("Error calling " + function);
     }
 
-    Py_XDECREF(result);*/
+    Py_XDECREF(result);
 }

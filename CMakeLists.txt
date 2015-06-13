@@ -16,3 +16,5 @@ target_link_libraries(
     copy_numpy_array
     ${EXTRA_LIBRARIES}
     ${PYTHON_LIBRARIES})
+
+file(COPY functions.py DESTINATION .)
