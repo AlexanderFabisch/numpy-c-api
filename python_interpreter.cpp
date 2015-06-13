@@ -45,7 +45,7 @@ PyObjectPtr makePyObjectPtr(PyObject* p)
     return PyObjectPtr(p, PyObjectDeleter());
 }
 
-PyObjectPtr create1dBuffer(double* array, unsigned size)
+PyObjectPtr new1dArray(double* array, unsigned size)
 {
   //FIXME Python expects sizeof(double) == 8.
   npy_intp dims[1] = {size};
@@ -54,7 +54,7 @@ PyObjectPtr create1dBuffer(double* array, unsigned size)
       PyArray_SimpleNewFromData(1, &dims[0], NPY_DOUBLE, (void*) array));
 }
 
-PyObjectPtr createPyString(const std::string& str)
+PyObjectPtr newString(const std::string& str)
 {
   PyObjectPtr pyStr = makePyObjectPtr(PyString_FromString(str.c_str()));
   if(!pyStr)
@@ -111,11 +111,11 @@ void PythonInterpreter::callFunction(
     const std::string& module, const std::string& function,
     std::vector<double>& array) const
 {
-    PyObjectPtr pyModuleString = createPyString(module);
+    PyObjectPtr pyModuleString = newString(module);
     PyObjectPtr pyModule = importModule(pyModuleString);
     PyObjectPtr pyFunc = getAttribute(pyModule, function);
 
-    PyObjectPtr memView = create1dBuffer(&array[0], array.size());
+    PyObjectPtr memView = new1dArray(&array[0], array.size());
 
     PyObjectPtr result = makePyObjectPtr(
         PyObject_CallFunction(pyFunc.get(), (char*)"O", memView.get()));
@@ -129,7 +129,7 @@ void PythonInterpreter::callFunction(
 void PythonInterpreter::callFunction(
     const std::string& module, const std::string& function) const
 {
-    PyObjectPtr pyModuleString = createPyString(module);
+    PyObjectPtr pyModuleString = newString(module);
     PyObjectPtr pyModule = importModule(pyModuleString);
     PyObjectPtr pyFunc = getAttribute(pyModule, function);
 
@@ -145,7 +145,7 @@ void PythonInterpreter::callFunction(
 std::vector<double> PythonInterpreter::callReturnFunction(
     const std::string& module, const std::string& function) const
 {
-    PyObjectPtr pyModuleString = createPyString(module);
+    PyObjectPtr pyModuleString = newString(module);
     PyObjectPtr pyModule = importModule(pyModuleString);
     PyObjectPtr pyFunc = getAttribute(pyModule, function);
 
