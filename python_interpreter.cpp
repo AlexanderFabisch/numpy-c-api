@@ -152,16 +152,25 @@ std::vector<double> PythonInterpreter::callReturnFunction(
     PyObjectPtr result = makePyObjectPtr(
         PyObject_CallFunction(pyFunc.get(), (char*)""));
 
+    std::vector<double> array;
     // TODO check whether result is a numpy array or list
 
-    int size = PyArray_SIZE(result.get());
-    std::vector<double> array(size);
+    const bool isArray = PyArray_Check(result.get());
+    if(isArray)
+    {
+        int size = PyArray_SIZE(result.get());
+        array.resize(size);
 
-    // TODO we are not sure whether the data is contiguous, use iterator:
-    // http://docs.scipy.org/doc/numpy/reference/c-api.array.html#data-access
-    double* data = (double *)PyArray_DATA(result.get());
-    for(unsigned i = 0; i < size; i++)
-        array[i] = data[i];
+        // TODO we are not sure whether the data is contiguous, use iterator:
+        // http://docs.scipy.org/doc/numpy/reference/c-api.array.html#data-access
+        double* data = (double *)PyArray_DATA(result.get());
+        for(unsigned i = 0; i < size; i++)
+            array[i] = data[i];
+    }
+    else
+    {
+        throw std::runtime_error("Unknown Python object type");
+    }
 
     if(PyErr_Occurred()) {
         PyErr_Print();
