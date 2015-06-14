@@ -9,7 +9,9 @@
 #include <memory>
 #include <stdexcept>
 
-// Memory management: we use shared pointers for PyObjects
+////////////////////////////////////////////////////////////////////////////////
+//////////////////////// Memory management /////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 /**
  * A managed pointer to PyObject which takes care about
@@ -45,6 +47,10 @@ PyObjectPtr makePyObjectPtr(PyObject* p)
     return PyObjectPtr(p, PyObjectDeleter());
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//////////////////////// Python object allocation //////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
 PyObjectPtr new1dArray(double* array, unsigned size)
 {
   //FIXME Python expects sizeof(double) == 8.
@@ -64,6 +70,10 @@ PyObjectPtr newString(const std::string& str)
   }
   return pyStr;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+//////////////////////// Helper functions //////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 PyObjectPtr importModule(const PyObjectPtr& module)
 {
@@ -92,40 +102,67 @@ PyObjectPtr getAttribute(PyObjectPtr obj, const std::string attribute)
 //////////////////////// Type conversions //////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
+struct NdArray
+{
+    PyObjectPtr obj;
+    static const bool check(PyObjectPtr obj) { return PyArray_Check(obj.get()); }
+    const unsigned size() { return PyArray_Size(obj.get()); }
+    const int ndim() { return PyArray_NDIM(obj.get()); }
+    const bool isDouble() { return PyArray_TYPE(obj.get()) == NPY_DOUBLE; }
+    const double get(unsigned i) { return *((double*)PyArray_GETPTR1(obj.get(), (npy_intp)i)); }
+};
+
+struct List
+{
+    PyObjectPtr obj;
+    static const bool check(PyObjectPtr obj) { return PyList_Check(obj.get()); }
+    const unsigned size() { return PyList_Size(obj.get()); }
+    const bool isDouble(unsigned i) { return PyFloat_Check(PyList_GetItem(obj.get(), i)); }
+    const double get(unsigned i) { return PyFloat_AsDouble(PyList_GetItem(obj.get(), (Py_ssize_t)i)); }
+};
+
+struct Tuple
+{
+    PyObjectPtr obj;
+    static const bool check(PyObjectPtr obj) { return PyTuple_Check(obj.get()); }
+    const unsigned size() { return PyTuple_Size(obj.get()); }
+    const bool isDouble(unsigned i) { return PyFloat_Check(PyTuple_GetItem(obj.get(), i)); }
+    const double get(unsigned i) { return PyFloat_AsDouble(PyTuple_GetItem(obj.get(), (Py_ssize_t)i)); }
+};
+
 bool toVector(PyObjectPtr obj, std::vector<double>& result)
 {
     bool knownType = true;
 
-    if(PyArray_Check(obj.get()))
+    if(NdArray::check(obj))
     {
-        Py_ssize_t size = PyArray_Size(obj.get());
+        NdArray ndarray = {obj};
+        const unsigned size = ndarray.size();
         result.resize(size);
 
-        const int ndim = PyArray_NDIM(obj.get());
+        const int ndim = ndarray.ndim();
         if(ndim != 1)
             throw std::runtime_error("Array object has " + std::to_string(ndim)
                                      + " dimensions, expected 1");
-        const auto type = PyArray_TYPE(obj.get());
-        if(type != NPY_DOUBLE)
+        if(!ndarray.isDouble())
             throw std::runtime_error("Array object does not contain doubles");
 
-        for(Py_ssize_t i = 0; i < size; i++)
-            result[i] = *((double*)PyArray_GETPTR1(obj.get(), (npy_intp)i));
+        for(unsigned i = 0; i < size; i++)
+            result[i] = ndarray.get(i);
     }
-    else if(PyList_Check(obj.get()))
+    else if(List::check(obj))
     {
-        Py_ssize_t size = PyList_Size(obj.get());
+        List list = {obj};
+        const unsigned size = list.size();
         result.resize(size);
 
-        for(Py_ssize_t i = 0; i < size; i++)
+        for(unsigned i = 0; i < size; i++)
         {
-            // Borrowed reference
-            PyObject* item = PyList_GetItem(obj.get(), i);
-            if(!PyFloat_Check(item))
+            if(!list.isDouble(i))
                 throw std::runtime_error(
                     "List object contains item that is not a double at index "
                     + std::to_string(i));
-            const double extractedItem = PyFloat_AsDouble(item);
+            result[i] = list.get(i);
             if(PyErr_Occurred())
             {
                 PyErr_Print();
@@ -133,23 +170,21 @@ bool toVector(PyObjectPtr obj, std::vector<double>& result)
                     "List object contains item that cannot be converted to "
                     "double at index " + std::to_string(i));
             }
-            result[i] = extractedItem;
         }
     }
-    else if(PyTuple_Check(obj.get()))
+    else if(Tuple::check(obj))
     {
-        Py_ssize_t size = PyTuple_Size(obj.get());
+        Tuple tuple = {obj};
+        const unsigned size = tuple.size();
         result.resize(size);
 
-        for(Py_ssize_t i = 0; i < size; i++)
+        for(unsigned i = 0; i < size; i++)
         {
-            // Borrowed reference
-            PyObject* item = PyTuple_GetItem(obj.get(), i);
-            if(!PyFloat_Check(item))
+            if(!tuple.isDouble(i))
                 throw std::runtime_error(
                     "Tuple object contains item that is not a double at index "
                     + std::to_string(i));
-            const double extractedItem = PyFloat_AsDouble(item);
+            result[i] = tuple.get(i);
             if(PyErr_Occurred())
             {
                 PyErr_Print();
@@ -157,7 +192,6 @@ bool toVector(PyObjectPtr obj, std::vector<double>& result)
                     "Tuple object contains item that cannot be converted to "
                     "double at index " + std::to_string(i));
             }
-            result[i] = extractedItem;
         }
     }
     else
