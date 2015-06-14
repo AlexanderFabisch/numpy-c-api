@@ -26,4 +26,9 @@ int main()
     for(double& r: result)
         std::cout << r << ", ";
     std::cout << std::endl;
+
+    // Goal:
+    //std::vector<double> result2 = python.import("function").function("multiple_io").passArray().passInt().call(array, 2).returnArray();
+    //Object object = pyhon.import("classes").clazz("Test").init().passDouble().call(3.0);
+    //object.method("print").passString().call("test");
 }
