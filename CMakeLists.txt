@@ -18,3 +18,6 @@ target_link_libraries(copy_numpy_array ${PYTHON_LIBRARIES})
 
 add_executable(hello_world hello_world.cpp python_interpreter.cpp)
 target_link_libraries(hello_world ${PYTHON_LIBRARIES})
+
+add_executable(import_error import_error.cpp python_interpreter.cpp)
+target_link_libraries(import_error ${PYTHON_LIBRARIES})

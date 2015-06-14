@@ -75,15 +75,34 @@ PyObjectPtr newString(const std::string& str)
 //////////////////////// Helper functions //////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
+void throwPythonException()
+{
+  PyObject* error = PyErr_Occurred(); // Borrowed reference
+  if(error != NULL)
+  {
+    PyObject* ptype, * pvalue, * ptraceback;
+    PyErr_Fetch(&ptype, &pvalue, &ptraceback);
+
+    PyObjectPtr pyexception = makePyObjectPtr(PyObject_GetAttrString(
+        ptype, (char*)"__name__"));
+    std::string type = PyString_AsString(pyexception.get());
+
+    PyObjectPtr pymessage = makePyObjectPtr(PyObject_Str(pvalue));
+    std::string message = PyString_AsString(pymessage.get());
+
+    Py_XDECREF(ptype);
+    Py_XDECREF(pvalue);
+    Py_XDECREF(ptraceback);
+
+    throw std::runtime_error("Python exception (" + type + "): " + message);
+  }
+}
+
 PyObjectPtr import(const std::string& module)
 {
   PyObjectPtr pyModuleName = newString(module);
   PyObjectPtr pyModule = makePyObjectPtr(PyImport_Import(pyModuleName.get()));
-  if(!pyModule)
-  {
-    PyErr_Print();
-    throw std::runtime_error("unable to load module");
-  }
+  throwPythonException();
   return pyModule;
 }
 
@@ -91,11 +110,7 @@ PyObjectPtr getAttribute(PyObjectPtr obj, const std::string attribute)
 {
     PyObjectPtr pyAttr = makePyObjectPtr(PyObject_GetAttrString(
         obj.get(), attribute.c_str()));
-    if(!pyAttr)
-    {
-        PyErr_Print();
-        throw std::runtime_error("unable to load python attribute");
-    }
+    throwPythonException();
     return pyAttr;
 }
 
@@ -164,13 +179,7 @@ bool toVector(PyObjectPtr obj, std::vector<double>& result)
                     "List object contains item that is not a double at index "
                     + std::to_string(i));
             result[i] = list.get(i);
-            if(PyErr_Occurred())
-            {
-                PyErr_Print();
-                throw std::runtime_error(
-                    "List object contains item that cannot be converted to "
-                    "double at index " + std::to_string(i));
-            }
+            throwPythonException();
         }
     }
     else if(Tuple::check(obj))
@@ -186,13 +195,7 @@ bool toVector(PyObjectPtr obj, std::vector<double>& result)
                     "Tuple object contains item that is not a double at index "
                     + std::to_string(i));
             result[i] = tuple.get(i);
-            if(PyErr_Occurred())
-            {
-                PyErr_Print();
-                throw std::runtime_error(
-                    "Tuple object contains item that cannot be converted to "
-                    "double at index " + std::to_string(i));
-            }
+            throwPythonException();
         }
     }
     else
@@ -234,10 +237,7 @@ void PythonInterpreter::callFunction(
     PyObjectPtr result = makePyObjectPtr(
         PyObject_CallFunction(pyFunc.get(), (char*)"O", memView.get()));
 
-    if(PyErr_Occurred()) {
-        PyErr_Print();
-        throw std::runtime_error("Error calling " + function);
-    }
+    throwPythonException();
 }
 
 void PythonInterpreter::callFunction(
@@ -249,10 +249,7 @@ void PythonInterpreter::callFunction(
     PyObjectPtr result = makePyObjectPtr(
         PyObject_CallFunction(pyFunc.get(), (char*)""));
 
-    if(PyErr_Occurred()) {
-        PyErr_Print();
-        throw std::runtime_error("Error calling " + function);
-    }
+    throwPythonException();
 }
 
 std::vector<double> PythonInterpreter::callReturnFunction(
@@ -264,10 +261,7 @@ std::vector<double> PythonInterpreter::callReturnFunction(
     PyObjectPtr result = makePyObjectPtr(
         PyObject_CallFunction(pyFunc.get(), (char*)""));
 
-    if(PyErr_Occurred()) {
-        PyErr_Print();
-        throw std::runtime_error("Error calling " + function);
-    }
+    throwPythonException();
 
     std::vector<double> array;
     const bool knownType = toVector(result, array);
