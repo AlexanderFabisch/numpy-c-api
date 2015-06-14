@@ -94,7 +94,6 @@ PyObjectPtr getAttribute(PyObjectPtr obj, const std::string attribute)
 
 bool toVector(PyObjectPtr obj, std::vector<double>& result)
 {
-    // TODO check whether obj is a numpy array or list
     bool knownType = true;
 
     if(PyArray_Check(obj.get()))
@@ -106,12 +105,12 @@ bool toVector(PyObjectPtr obj, std::vector<double>& result)
         if(ndim != 1)
             throw std::runtime_error("Array object has " + std::to_string(ndim)
                                      + " dimensions, expected 1");
+        const auto type = PyArray_TYPE(obj.get());
+        if(type != NPY_DOUBLE)
+            throw std::runtime_error("Array object does not contain doubles");
 
-        // TODO we are not sure whether the data is contiguous, use iterator:
-        // http://docs.scipy.org/doc/numpy/reference/c-api.array.html#data-access
-        double* data = (double *)PyArray_DATA(obj.get());
         for(Py_ssize_t i = 0; i < size; i++)
-            result[i] = data[i];
+            result[i] = *((double*)PyArray_GETPTR1(obj.get(), (npy_intp)i));
     }
     else if(PyList_Check(obj.get()))
     {
