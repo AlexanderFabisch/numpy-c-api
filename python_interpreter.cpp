@@ -102,6 +102,11 @@ bool toVector(PyObjectPtr obj, std::vector<double>& result)
         Py_ssize_t size = PyArray_Size(obj.get());
         result.resize(size);
 
+        const int ndim = PyArray_NDIM(obj.get());
+        if(ndim != 1)
+            throw std::runtime_error("Array object has " + std::to_string(ndim)
+                                     + " dimensions, expected 1");
+
         // TODO we are not sure whether the data is contiguous, use iterator:
         // http://docs.scipy.org/doc/numpy/reference/c-api.array.html#data-access
         double* data = (double *)PyArray_DATA(obj.get());
