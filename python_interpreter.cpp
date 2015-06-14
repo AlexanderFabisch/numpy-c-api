@@ -98,7 +98,7 @@ void throwPythonException()
   }
 }
 
-PyObjectPtr import(const std::string& module)
+PyObjectPtr importModule(const std::string& module)
 {
   PyObjectPtr pyModuleName = newString(module);
   PyObjectPtr pyModule = makePyObjectPtr(PyImport_Import(pyModuleName.get()));
@@ -229,7 +229,7 @@ void PythonInterpreter::callFunction(
     const std::string& module, const std::string& function,
     std::vector<double>& array) const
 {
-    PyObjectPtr pyModule = import(module);
+    PyObjectPtr pyModule = importModule(module);
     PyObjectPtr pyFunc = getAttribute(pyModule, function);
 
     PyObjectPtr memView = new1dArray(&array[0], array.size());
@@ -240,22 +240,10 @@ void PythonInterpreter::callFunction(
     throwPythonException();
 }
 
-void PythonInterpreter::callFunction(
-    const std::string& module, const std::string& function) const
-{
-    PyObjectPtr pyModule = import(module);
-    PyObjectPtr pyFunc = getAttribute(pyModule, function);
-
-    PyObjectPtr result = makePyObjectPtr(
-        PyObject_CallFunction(pyFunc.get(), (char*)""));
-
-    throwPythonException();
-}
-
 std::vector<double> PythonInterpreter::callReturnFunction(
     const std::string& module, const std::string& function) const
 {
-    PyObjectPtr pyModule = import(module);
+    PyObjectPtr pyModule = importModule(module);
     PyObjectPtr pyFunc = getAttribute(pyModule, function);
 
     PyObjectPtr result = makePyObjectPtr(
@@ -270,4 +258,47 @@ std::vector<double> PythonInterpreter::callReturnFunction(
                                  "doubles");
 
     return array;
+}
+
+struct FunctionState
+{
+    PyObjectPtr functionPtr;
+    PyObjectPtr result;
+};
+
+struct ModuleState
+{
+    PyObjectPtr modulePtr;
+    std::shared_ptr<Function> currentFunction;
+};
+
+Function::Function(ModuleState& module, const std::string& name)
+{
+    state = std::shared_ptr<FunctionState>(
+        new FunctionState{getAttribute(module.modulePtr, name)});
+}
+
+Function& Function::call()
+{
+    state->result = makePyObjectPtr(
+        PyObject_CallFunction(state->functionPtr.get(), (char*)""));
+
+    throwPythonException();
+}
+
+Module::Module(const std::string& name)
+    : state(NULL)
+{
+    state = std::shared_ptr<ModuleState>(new ModuleState{importModule(name)});
+}
+
+Function& Module::function(const std::string& name)
+{
+    state->currentFunction = std::make_shared<Function>(*state.get(), name);
+    return *state->currentFunction.get();
+}
+
+std::shared_ptr<Module> PythonInterpreter::import(const std::string& name) const
+{
+    return std::make_shared<Module>(name);
 }

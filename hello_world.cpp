@@ -4,5 +4,5 @@
 int main()
 {
     const PythonInterpreter& python = PythonInterpreter::instance();
-    python.callFunction("functions", "hello_world");
+    python.import("functions")->function("hello_world").call();
 }
