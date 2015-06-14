@@ -75,9 +75,10 @@ PyObjectPtr newString(const std::string& str)
 //////////////////////// Helper functions //////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-PyObjectPtr importModule(const PyObjectPtr& module)
+PyObjectPtr import(const std::string& module)
 {
-  PyObjectPtr pyModule = makePyObjectPtr(PyImport_Import(module.get()));
+  PyObjectPtr pyModuleName = newString(module);
+  PyObjectPtr pyModule = makePyObjectPtr(PyImport_Import(pyModuleName.get()));
   if(!pyModule)
   {
     PyErr_Print();
@@ -225,8 +226,7 @@ void PythonInterpreter::callFunction(
     const std::string& module, const std::string& function,
     std::vector<double>& array) const
 {
-    PyObjectPtr pyModuleString = newString(module);
-    PyObjectPtr pyModule = importModule(pyModuleString);
+    PyObjectPtr pyModule = import(module);
     PyObjectPtr pyFunc = getAttribute(pyModule, function);
 
     PyObjectPtr memView = new1dArray(&array[0], array.size());
@@ -243,8 +243,7 @@ void PythonInterpreter::callFunction(
 void PythonInterpreter::callFunction(
     const std::string& module, const std::string& function) const
 {
-    PyObjectPtr pyModuleString = newString(module);
-    PyObjectPtr pyModule = importModule(pyModuleString);
+    PyObjectPtr pyModule = import(module);
     PyObjectPtr pyFunc = getAttribute(pyModule, function);
 
     PyObjectPtr result = makePyObjectPtr(
@@ -259,8 +258,7 @@ void PythonInterpreter::callFunction(
 std::vector<double> PythonInterpreter::callReturnFunction(
     const std::string& module, const std::string& function) const
 {
-    PyObjectPtr pyModuleString = newString(module);
-    PyObjectPtr pyModule = importModule(pyModuleString);
+    PyObjectPtr pyModule = import(module);
     PyObjectPtr pyFunc = getAttribute(pyModule, function);
 
     PyObjectPtr result = makePyObjectPtr(
