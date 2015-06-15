@@ -50,30 +50,6 @@ PyObjectPtr makePyObjectPtr(PyObject* p)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-//////////////////////// Python object allocation //////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-
-PyObjectPtr new1dArray(double* array, unsigned size)
-{
-  //FIXME Python expects sizeof(double) == 8.
-  npy_intp dims[1] = {size};
-  //FIXME not sure if dims should be stack allocated
-  return makePyObjectPtr(
-      PyArray_SimpleNewFromData(1, &dims[0], NPY_DOUBLE, (void*) array));
-}
-
-PyObjectPtr newString(const std::string& str)
-{
-  PyObjectPtr pyStr = makePyObjectPtr(PyString_FromString(str.c_str()));
-  if(!pyStr)
-  {
-    PyErr_Print();
-    throw std::runtime_error("unable to create PyString");
-  }
-  return pyStr;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 //////////////////////// Helper functions //////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -127,22 +103,6 @@ void throwPythonException()
   }
 }
 
-PyObjectPtr importModule(const std::string& module)
-{
-  PyObjectPtr pyModuleName = newString(module);
-  PyObjectPtr pyModule = makePyObjectPtr(PyImport_Import(pyModuleName.get()));
-  throwPythonException();
-  return pyModule;
-}
-
-PyObjectPtr getAttribute(PyObjectPtr obj, const std::string attribute)
-{
-    PyObjectPtr pyAttr = makePyObjectPtr(PyObject_GetAttrString(
-        obj.get(), attribute.c_str()));
-    throwPythonException();
-    return pyAttr;
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 //////////////////////// Type conversions //////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -152,7 +112,12 @@ struct NdArray
     PyObjectPtr obj;
     static NdArray make(std::vector<double>& ndarray)
     {
-        return NdArray{new1dArray(&ndarray[0], ndarray.size())};
+        //FIXME Python expects sizeof(double) == 8.
+        npy_intp dims[1] = {(npy_intp)ndarray.size()};
+        //FIXME not sure if dims should be stack allocated
+        return NdArray{makePyObjectPtr(
+            PyArray_SimpleNewFromData(1, &dims[0], NPY_DOUBLE,
+                                      (void*)(&ndarray[0])))};
     }
     static const bool check(PyObjectPtr obj) { return PyArray_Check(obj.get()); }
     const unsigned size() { return PyArray_Size(obj.get()); }
@@ -309,6 +274,27 @@ void toPyObjects(std::va_list& cppArgs, const std::list<CppType>& types, std::ve
         }
         throwPythonException();
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//////////////////////// Helper functions //////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+PyObjectPtr importModule(const std::string& module)
+{
+  PyObjectPtr pyModuleName = String::make(module).obj;
+  throwPythonException();
+  PyObjectPtr pyModule = makePyObjectPtr(PyImport_Import(pyModuleName.get()));
+  throwPythonException();
+  return pyModule;
+}
+
+PyObjectPtr getAttribute(PyObjectPtr obj, const std::string attribute)
+{
+    PyObjectPtr pyAttr = makePyObjectPtr(PyObject_GetAttrString(
+        obj.get(), attribute.c_str()));
+    throwPythonException();
+    return pyAttr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
