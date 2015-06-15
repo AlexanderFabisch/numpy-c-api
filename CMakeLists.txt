@@ -12,9 +12,13 @@ include_directories(.)
 link_directories(${PYTHON_LIBRARY_DIRS})
 
 file(COPY functions.py DESTINATION .)
+file(COPY classes.py DESTINATION .)
 
 add_executable(copy_numpy_array copy_numpy_array.cpp python_interpreter.cpp)
 target_link_libraries(copy_numpy_array ${PYTHON_LIBRARIES})
+
+add_executable(create_object create_object.cpp python_interpreter.cpp)
+target_link_libraries(create_object ${PYTHON_LIBRARIES})
 
 add_executable(hello_world hello_world.cpp python_interpreter.cpp)
 target_link_libraries(hello_world ${PYTHON_LIBRARIES})
