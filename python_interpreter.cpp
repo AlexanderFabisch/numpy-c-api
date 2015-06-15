@@ -289,7 +289,7 @@ PyObjectPtr importModule(const std::string& module)
   return pyModule;
 }
 
-PyObjectPtr getAttribute(PyObjectPtr obj, const std::string attribute)
+PyObjectPtr getAttribute(PyObjectPtr obj, const std::string& attribute)
 {
     PyObjectPtr pyAttr = makePyObjectPtr(PyObject_GetAttrString(
         obj.get(), attribute.c_str()));
@@ -346,6 +346,7 @@ struct ModuleState
 {
     PyObjectPtr modulePtr;
     std::shared_ptr<Function> currentFunction;
+    std::shared_ptr<Object> currentVariable;
 };
 
 Object::Object(std::shared_ptr<ObjectState> state)
@@ -525,6 +526,24 @@ Function& Module::function(const std::string& name)
 {
     state->currentFunction = std::make_shared<Function>(*state, name);
     return *state->currentFunction;
+}
+
+Object& Module::variable(const std::string& name)
+{
+    auto objectState = std::shared_ptr<ObjectState>(
+        new ObjectState{getAttribute(state->modulePtr, name)});
+    state->currentVariable = std::make_shared<Object>(objectState);
+    return *state->currentVariable;
+}
+
+void PythonInterpreter::addToPythonpath(const std::string& path) const
+{
+    PyObjectPtr pythonpath = import("sys")->variable("path").state->objectPtr;
+    PyObjectPtr entry = String::make(path).obj;
+    int res = PyList_Append(pythonpath.get(), entry.get());
+    throwPythonException();
+    if(res != 0)
+        throw std::runtime_error("Could not append " + path + " to sys.path");
 }
 
 std::shared_ptr<Module> PythonInterpreter::import(const std::string& name) const
