@@ -284,6 +284,7 @@ Function& Function::call()
         PyObject_CallFunction(state->functionPtr.get(), (char*)""));
 
     throwPythonException();
+    return *this;
 }
 
 Module::Module(const std::string& name)
