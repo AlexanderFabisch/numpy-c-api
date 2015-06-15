@@ -85,18 +85,45 @@ void throwPythonException()
     PyObject* ptype, * pvalue, * ptraceback;
     PyErr_Fetch(&ptype, &pvalue, &ptraceback);
 
+    // Exception type
     PyObjectPtr pyexception = makePyObjectPtr(PyObject_GetAttrString(
         ptype, (char*)"__name__"));
     std::string type = PyString_AsString(pyexception.get());
 
+    // Message
     PyObjectPtr pymessage = makePyObjectPtr(PyObject_Str(pvalue));
     std::string message = PyString_AsString(pymessage.get());
+
+    // Traceback
+    PyObjectPtr tracebackModule = makePyObjectPtr(PyImport_ImportModule("traceback"));
+    std::string traceback;
+    if (tracebackModule != NULL) {
+        PyObjectPtr tbList = makePyObjectPtr(
+            PyObject_CallMethod(
+                tracebackModule.get(), (char*)"format_exception",
+                (char*)"OOO", ptype, pvalue == NULL ? Py_None : pvalue,
+                ptraceback == NULL ? Py_None : ptraceback));
+
+        PyObjectPtr emptyString = makePyObjectPtr(PyString_FromString(""));
+        PyObjectPtr strRetval = makePyObjectPtr(
+            PyObject_CallMethod(emptyString.get(), (char*)"join", (char*)"O",
+                                tbList.get()));
+
+        traceback = PyString_AsString(strRetval.get());
+    }
+    else
+    {
+        traceback = "Empty traceback";
+    }
 
     Py_XDECREF(ptype);
     Py_XDECREF(pvalue);
     Py_XDECREF(ptraceback);
 
-    throw std::runtime_error("Python exception (" + type + "): " + message);
+    std::string error_message = "Python exception (" + type + "): " + message;
+    if(traceback != (type + ": " + message + "\n"))
+        error_message += "\n" + traceback;
+    throw std::runtime_error(error_message);
   }
 }
 

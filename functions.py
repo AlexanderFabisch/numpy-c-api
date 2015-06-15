@@ -41,3 +41,6 @@ def take_array(a):
 
 def multiple_io(a, b):
     return [a, float(b)]
+
+def raise_import_error():
+    import bla
