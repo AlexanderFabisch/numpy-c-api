@@ -14,3 +14,6 @@ def produce_list():
 
 def produce_tuple():
     return (1.4, 2.5, 3.6)
+
+def multiple_io(a, b):
+    return [a, float(b)]

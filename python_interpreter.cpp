@@ -9,6 +9,7 @@
 #include <memory>
 #include <stdexcept>
 #include <list>
+#include <cstdarg>
 
 ////////////////////////////////////////////////////////////////////////////////
 //////////////////////// Memory management /////////////////////////////////////
@@ -122,6 +123,10 @@ PyObjectPtr getAttribute(PyObjectPtr obj, const std::string attribute)
 struct NdArray
 {
     PyObjectPtr obj;
+    static NdArray make(std::vector<double>& ndarray)
+    {
+        return NdArray{new1dArray(&ndarray[0], ndarray.size())};
+    }
     static const bool check(PyObjectPtr obj) { return PyArray_Check(obj.get()); }
     const unsigned size() { return PyArray_Size(obj.get()); }
     const int ndim() { return PyArray_NDIM(obj.get()); }
@@ -145,6 +150,18 @@ struct Tuple
     const unsigned size() { return PyTuple_Size(obj.get()); }
     const bool isDouble(unsigned i) { return PyFloat_Check(PyTuple_GetItem(obj.get(), i)); }
     const double get(unsigned i) { return PyFloat_AsDouble(PyTuple_GetItem(obj.get(), (Py_ssize_t)i)); }
+};
+
+struct Int
+{
+    PyObjectPtr obj;
+    static Int make(int i) { return Int{makePyObjectPtr(PyInt_FromLong((long) i))}; }
+};
+
+struct Double
+{
+    PyObjectPtr obj;
+    static Double make(double d) { return Double{makePyObjectPtr(PyFloat_FromDouble(d))}; }
 };
 
 bool toVector(PyObjectPtr obj, std::vector<double>& result)
@@ -206,6 +223,10 @@ bool toVector(PyObjectPtr obj, std::vector<double>& result)
 
     return knownType;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+//////////////////////// Public interface //////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 PythonInterpreter::PythonInterpreter()
 {
@@ -289,22 +310,84 @@ Function::Function(ModuleState& module, const std::string& name)
 Function& Function::passInt()
 {
     state->args.push_back(INT);
+    return *this;
 }
 
 Function& Function::passDouble()
 {
     state->args.push_back(DOUBLE);
+    return *this;
 }
 
 Function& Function::pass1dArray()
 {
     state->args.push_back(ONEDARRAY);
+    return *this;
 }
 
-Function& Function::call()
+Function& Function::call(...)
 {
-    state->result = makePyObjectPtr(
-        PyObject_CallFunction(state->functionPtr.get(), (char*)""));
+    const size_t argc = state->args.size();
+
+    std::va_list vaList;
+    va_start(vaList, this);
+
+    std::vector<PyObjectPtr> args;
+    args.reserve(argc);
+
+    for(CppType& t: state->args)
+    {
+        switch(t)
+        {
+        case INT:
+        {
+            const int i = va_arg(vaList, int);
+            args.push_back(Int::make(i).obj);
+            break;
+        }
+        case DOUBLE:
+        {
+            const double d = va_arg(vaList, double);
+            args.push_back(Double::make(d).obj);
+            break;
+        }
+        case ONEDARRAY:
+        {
+            std::vector<double>* array = va_arg(vaList, std::vector<double>*);
+            args.push_back(NdArray::make(*array).obj);
+            break;
+        }
+        default:
+            throw std::runtime_error("Unknown function argument type");
+        }
+    }
+
+    // For the characters that describe the argument type, see
+    // https://docs.python.org/2/c-api/arg.html#c.Py_BuildValue
+    // However, we will convert everything to PyObjects before calling the
+    // function
+    std::string format(argc, 'O');
+    char* format_str = const_cast<char*>(format.c_str()); // HACK
+
+    switch(argc)
+    {
+    case 0:
+        state->result = makePyObjectPtr(
+            PyObject_CallFunction(state->functionPtr.get(), format_str));
+        break;
+    case 1:
+        state->result = makePyObjectPtr(
+            PyObject_CallFunction(state->functionPtr.get(), format_str,
+                                  args[0].get()));
+        break;
+    case 2:
+        state->result = makePyObjectPtr(
+            PyObject_CallFunction(state->functionPtr.get(), format_str,
+                                  args[0].get(), args[1].get()));
+        break;
+    default:
+        throw std::runtime_error("Cannot handle more than 2 argument");
+    }
 
     state->args.clear();
 

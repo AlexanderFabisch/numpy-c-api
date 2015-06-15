@@ -17,7 +17,7 @@ public:
     Function& passInt();
     Function& passDouble();
     Function& pass1dArray();
-    Function& call();
+    Function& call(...);
     std::shared_ptr<std::vector<double> > return1dArray();
 };
 
