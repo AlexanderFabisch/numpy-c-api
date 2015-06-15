@@ -13,25 +13,32 @@ class Function;
 class Method;
 class Module;
 
+enum CppType
+{
+    INT, DOUBLE, BOOL, STRING, ONEDARRAY
+};
+
 class Object
 {
     std::shared_ptr<ObjectState> state;
 public:
     Object(std::shared_ptr<ObjectState> state);
     Method& method(const std::string& name);
+    std::shared_ptr<std::vector<double> > as1dArray();
+    double asDouble();
+    int asInt();
+    bool asBool();
+    std::string asString();
 };
 
-// TODO Function and Method contain duplicate code
+// TODO Function and Method may contain duplicate code
 class Function
 {
     std::shared_ptr<FunctionState> state;
 public:
     Function(ModuleState& module, const std::string& name);
-    Function& passInt();
-    Function& passDouble();
-    Function& pass1dArray();
+    Function& pass(CppType type);
     Function& call(...);
-    std::shared_ptr<std::vector<double> > return1dArray();
     std::shared_ptr<Object> returnObject();
 };
 
@@ -39,12 +46,9 @@ class Method
 {
     std::shared_ptr<MethodState> state;
 public:
-    Method(ObjectState& module, const std::string& name);
-    Method& passInt();
-    Method& passDouble();
-    Method& pass1dArray();
+    Method(ObjectState& object, const std::string& name);
+    Method& pass(CppType type);
     Method& call(...);
-    std::shared_ptr<std::vector<double> > return1dArray();
     std::shared_ptr<Object> returnObject();
 };
 

@@ -156,12 +156,28 @@ struct Int
 {
     PyObjectPtr obj;
     static Int make(int i) { return Int{makePyObjectPtr(PyInt_FromLong((long) i))}; }
+    const double get() { return (int)PyInt_AsLong(obj.get()); }
 };
 
 struct Double
 {
     PyObjectPtr obj;
     static Double make(double d) { return Double{makePyObjectPtr(PyFloat_FromDouble(d))}; }
+    const double get() { return PyFloat_AsDouble(obj.get()); }
+};
+
+struct Bool
+{
+    PyObjectPtr obj;
+    static Bool make(bool b) { return Bool{makePyObjectPtr(PyBool_FromLong((long)b))}; }
+    const bool get() { return (bool)PyObject_IsTrue(obj.get()); }
+};
+
+struct String
+{
+    PyObjectPtr obj;
+    static String make(const std::string& s) { return String{makePyObjectPtr(PyString_FromString(s.c_str()))}; }
+    const std::string get() { return PyString_AsString(obj.get()); }
 };
 
 bool toVector(PyObjectPtr obj, std::vector<double>& result)
@@ -247,11 +263,6 @@ const PythonInterpreter& PythonInterpreter::instance()
     return pythonInterpreter;
 }
 
-enum CppType
-{
-    INT, DOUBLE, ONEDARRAY
-};
-
 struct ObjectState
 {
     PyObjectPtr objectPtr;
@@ -291,27 +302,52 @@ Method& Object::method(const std::string& name)
     return *state->currentMethod;
 }
 
+std::shared_ptr<std::vector<double> > Object::as1dArray()
+{
+    auto array = std::make_shared<std::vector<double> >();
+    const bool knownType = toVector(state->objectPtr, *array);
+    if(!knownType)
+        throw std::runtime_error("Object is not a sequence of doubles");
+    return array;
+}
+
+double Object::asDouble()
+{
+    const double result = Double{state->objectPtr}.get();
+    throwPythonException();
+    return result;
+}
+
+int Object::asInt()
+{
+    const int result = Int{state->objectPtr}.get();
+    throwPythonException();
+    return result;
+}
+
+bool Object::asBool()
+{
+    const bool result = Bool{state->objectPtr}.get();
+    throwPythonException();
+    return result;
+}
+
+std::string Object::asString()
+{
+    const std::string result = String{state->objectPtr}.get();
+    throwPythonException();
+    return result;
+}
+
 Function::Function(ModuleState& module, const std::string& name)
 {
     state = std::shared_ptr<FunctionState>(
         new FunctionState{name, getAttribute(module.modulePtr, name)});
 }
 
-Function& Function::passInt()
+Function& Function::pass(CppType type)
 {
-    state->args.push_back(INT);
-    return *this;
-}
-
-Function& Function::passDouble()
-{
-    state->args.push_back(DOUBLE);
-    return *this;
-}
-
-Function& Function::pass1dArray()
-{
-    state->args.push_back(ONEDARRAY);
+    state->args.push_back(type);
     return *this;
 }
 
@@ -339,6 +375,19 @@ Function& Function::call(...)
         {
             const double d = va_arg(vaList, double);
             args.push_back(Double::make(d).obj);
+            break;
+        }
+        case BOOL:
+        {
+            // bool is promoted to int when passed through "..."
+            const int b = va_arg(vaList, int);
+            args.push_back(Bool::make((bool)b).obj);
+            break;
+        }
+        case STRING:
+        {
+            std::string* str = va_arg(vaList, std::string*);
+            args.push_back(String::make(*str).obj);
             break;
         }
         case ONEDARRAY:
@@ -379,16 +428,6 @@ Function& Function::call(...)
     return *this;
 }
 
-std::shared_ptr<std::vector<double> > Function::return1dArray()
-{
-    auto array = std::make_shared<std::vector<double> >();
-    const bool knownType = toVector(state->result, *array);
-    if(!knownType)
-        throw std::runtime_error(
-            state->name + " does not return a sequence of doubles");
-    return array;
-}
-
 std::shared_ptr<Object> Function::returnObject()
 {
     auto objectState = std::shared_ptr<ObjectState>(new ObjectState{state->result});
@@ -401,21 +440,9 @@ Method::Method(ObjectState& object, const std::string& name)
         new MethodState{object.objectPtr, name});
 }
 
-Method& Method::passInt()
+Method& Method::pass(CppType type)
 {
-    state->args.push_back(INT);
-    return *this;
-}
-
-Method& Method::passDouble()
-{
-    state->args.push_back(DOUBLE);
-    return *this;
-}
-
-Method& Method::pass1dArray()
-{
-    state->args.push_back(ONEDARRAY);
+    state->args.push_back(type);
     return *this;
 }
 
@@ -490,16 +517,6 @@ Method& Method::call(...)
 
     throwPythonException();
     return *this;
-}
-
-std::shared_ptr<std::vector<double> > Method::return1dArray()
-{
-    auto array = std::make_shared<std::vector<double> >();
-    const bool knownType = toVector(state->result, *array);
-    if(!knownType)
-        throw std::runtime_error(
-            state->name + " does not return a sequence of doubles");
-    return array;
 }
 
 std::shared_ptr<Object> Method::returnObject()
