@@ -1,7 +1,9 @@
 #include <memory>
 #include <string>
-
 #include <vector>
+
+// TODO to allow calling functions/methods with arbitrary arguments we must
+// create a callable object and pass a Python argument list
 
 
 struct ObjectState;
