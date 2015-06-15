@@ -267,6 +267,50 @@ bool toVector(PyObjectPtr obj, std::vector<double>& result)
     return knownType;
 }
 
+void toPyObjects(std::va_list& cppArgs, const std::list<CppType>& types, std::vector<PyObjectPtr>& args)
+{
+    for(const CppType& t: types)
+    {
+        switch(t)
+        {
+        case INT:
+        {
+            const int i = va_arg(cppArgs, int);
+            args.push_back(Int::make(i).obj);
+            break;
+        }
+        case DOUBLE:
+        {
+            const double d = va_arg(cppArgs, double);
+            args.push_back(Double::make(d).obj);
+            break;
+        }
+        case BOOL:
+        {
+            // bool is promoted to int when passed through "..."
+            const int b = va_arg(cppArgs, int);
+            args.push_back(Bool::make((bool)b).obj);
+            break;
+        }
+        case STRING:
+        {
+            std::string* str = va_arg(cppArgs, std::string*);
+            args.push_back(String::make(*str).obj);
+            break;
+        }
+        case ONEDARRAY:
+        {
+            std::vector<double>* array = va_arg(cppArgs, std::vector<double>*);
+            args.push_back(NdArray::make(*array).obj);
+            break;
+        }
+        default:
+            throw std::runtime_error("Unknown function argument type");
+        }
+        throwPythonException();
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //////////////////////// Public interface //////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -387,47 +431,7 @@ Function& Function::call(...)
 
     std::vector<PyObjectPtr> args;
     args.reserve(argc);
-
-    for(CppType& t: state->args)
-    {
-        switch(t)
-        {
-        case INT:
-        {
-            const int i = va_arg(vaList, int);
-            args.push_back(Int::make(i).obj);
-            break;
-        }
-        case DOUBLE:
-        {
-            const double d = va_arg(vaList, double);
-            args.push_back(Double::make(d).obj);
-            break;
-        }
-        case BOOL:
-        {
-            // bool is promoted to int when passed through "..."
-            const int b = va_arg(vaList, int);
-            args.push_back(Bool::make((bool)b).obj);
-            break;
-        }
-        case STRING:
-        {
-            std::string* str = va_arg(vaList, std::string*);
-            args.push_back(String::make(*str).obj);
-            break;
-        }
-        case ONEDARRAY:
-        {
-            std::vector<double>* array = va_arg(vaList, std::vector<double>*);
-            args.push_back(NdArray::make(*array).obj);
-            break;
-        }
-        default:
-            throw std::runtime_error("Unknown function argument type");
-        }
-        throwPythonException();
-    }
+    toPyObjects(vaList, state->args, args);
 
     switch(argc)
     {
@@ -482,34 +486,7 @@ Method& Method::call(...)
 
     std::vector<PyObjectPtr> args;
     args.reserve(argc);
-
-    for(CppType& t: state->args)
-    {
-        switch(t)
-        {
-        case INT:
-        {
-            const int i = va_arg(vaList, int);
-            args.push_back(Int::make(i).obj);
-            break;
-        }
-        case DOUBLE:
-        {
-            const double d = va_arg(vaList, double);
-            args.push_back(Double::make(d).obj);
-            break;
-        }
-        case ONEDARRAY:
-        {
-            std::vector<double>* array = va_arg(vaList, std::vector<double>*);
-            args.push_back(NdArray::make(*array).obj);
-            break;
-        }
-        default:
-            throw std::runtime_error("Unknown method argument type");
-        }
-        throwPythonException();
-    }
+    toPyObjects(vaList, state->args, args);
 
     // For the characters that describe the argument type, see
     // https://docs.python.org/2/c-api/arg.html#c.Py_BuildValue
