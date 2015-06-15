@@ -353,28 +353,21 @@ Function& Function::call(...)
         throwPythonException();
     }
 
-    // For the characters that describe the argument type, see
-    // https://docs.python.org/2/c-api/arg.html#c.Py_BuildValue
-    // However, we will convert everything to PyObjects before calling the
-    // function
-    std::string format(argc, 'O');
-    char* format_str = const_cast<char*>(format.c_str()); // HACK
-
     switch(argc)
     {
     case 0:
         state->result = makePyObjectPtr(
-            PyObject_CallFunction(state->functionPtr.get(), format_str));
+            PyObject_CallFunctionObjArgs(state->functionPtr.get(), NULL));
         break;
     case 1:
         state->result = makePyObjectPtr(
-            PyObject_CallFunction(state->functionPtr.get(), format_str,
-                                  args[0].get()));
+            PyObject_CallFunctionObjArgs(state->functionPtr.get(),
+                                         args[0].get(), NULL));
         break;
     case 2:
         state->result = makePyObjectPtr(
-            PyObject_CallFunction(state->functionPtr.get(), format_str,
-                                  args[0].get(), args[1].get()));
+            PyObject_CallFunctionObjArgs(state->functionPtr.get(),
+                                         args[0].get(), args[1].get(), NULL));
         break;
     default:
         throw std::runtime_error("Cannot handle more than 2 argument");
