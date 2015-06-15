@@ -9,21 +9,18 @@ int main()
     std::vector<double> array{1.2, 2.3, 3.4};
     python.callFunction("functions", "take_array", array);
 
-    std::vector<double> result = python.callReturnFunction(
-        "functions", "produce_array");
-    for(double& r: result)
+    auto result = python.import("functions")->function("produce_array").call().return1dArray();
+    for(double& r: *result)
         std::cout << r << ", ";
     std::cout << std::endl;
 
-    result = python.callReturnFunction(
-        "functions", "produce_list");
-    for(double& r: result)
+    result = python.import("functions")->function("produce_list").call().return1dArray();
+    for(double& r: *result)
         std::cout << r << ", ";
     std::cout << std::endl;
 
-    result = python.callReturnFunction(
-        "functions", "produce_tuple");
-    for(double& r: result)
+    result = python.import("functions")->function("produce_tuple").call().return1dArray();
+    for(double& r: *result)
         std::cout << r << ", ";
     std::cout << std::endl;
 

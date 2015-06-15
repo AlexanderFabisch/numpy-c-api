@@ -14,7 +14,11 @@ class Function
     std::shared_ptr<FunctionState> state;
 public:
     Function(ModuleState& module, const std::string& name);
+    Function& passInt();
+    Function& passDouble();
+    Function& pass1dArray();
     Function& call();
+    std::shared_ptr<std::vector<double> > return1dArray();
 };
 
 class Module

@@ -8,6 +8,7 @@
 #include <python_interpreter.hpp>
 #include <memory>
 #include <stdexcept>
+#include <list>
 
 ////////////////////////////////////////////////////////////////////////////////
 //////////////////////// Memory management /////////////////////////////////////
@@ -260,9 +261,16 @@ std::vector<double> PythonInterpreter::callReturnFunction(
     return array;
 }
 
+enum CppType
+{
+    INT, DOUBLE, ONEDARRAY
+};
+
 struct FunctionState
 {
+    std::string name;
     PyObjectPtr functionPtr;
+    std::list<CppType> args;
     PyObjectPtr result;
 };
 
@@ -275,7 +283,22 @@ struct ModuleState
 Function::Function(ModuleState& module, const std::string& name)
 {
     state = std::shared_ptr<FunctionState>(
-        new FunctionState{getAttribute(module.modulePtr, name)});
+        new FunctionState{name, getAttribute(module.modulePtr, name)});
+}
+
+Function& Function::passInt()
+{
+    state->args.push_back(INT);
+}
+
+Function& Function::passDouble()
+{
+    state->args.push_back(DOUBLE);
+}
+
+Function& Function::pass1dArray()
+{
+    state->args.push_back(ONEDARRAY);
 }
 
 Function& Function::call()
@@ -283,8 +306,20 @@ Function& Function::call()
     state->result = makePyObjectPtr(
         PyObject_CallFunction(state->functionPtr.get(), (char*)""));
 
+    state->args.clear();
+
     throwPythonException();
     return *this;
+}
+
+std::shared_ptr<std::vector<double> > Function::return1dArray()
+{
+    auto array = std::make_shared<std::vector<double> >();
+    const bool knownType = toVector(state->result, *array);
+    if(!knownType)
+        throw std::runtime_error(
+            state->name + " does not return a sequence of doubles");
+    return array;
 }
 
 Module::Module(const std::string& name)
@@ -295,8 +330,8 @@ Module::Module(const std::string& name)
 
 Function& Module::function(const std::string& name)
 {
-    state->currentFunction = std::make_shared<Function>(*state.get(), name);
-    return *state->currentFunction.get();
+    state->currentFunction = std::make_shared<Function>(*state, name);
+    return *state->currentFunction;
 }
 
 std::shared_ptr<Module> PythonInterpreter::import(const std::string& name) const
