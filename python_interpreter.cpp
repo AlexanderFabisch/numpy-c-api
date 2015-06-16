@@ -6,7 +6,6 @@
 #include <numpy/arrayobject.h>
 
 #include <python_interpreter.hpp>
-#include <memory>
 #include <stdexcept>
 #include <list>
 #include <cstdarg>
@@ -129,10 +128,13 @@ struct NdArray
 struct List
 {
     PyObjectPtr obj;
+    static List make() { return List{makePyObjectPtr(PyList_New(0))}; }
     static const bool check(PyObjectPtr obj) { return PyList_Check(obj.get()); }
     const unsigned size() { return PyList_Size(obj.get()); }
     const bool isDouble(unsigned i) { return PyFloat_Check(PyList_GetItem(obj.get(), i)); }
     const double get(unsigned i) { return PyFloat_AsDouble(PyList_GetItem(obj.get(), (Py_ssize_t)i)); }
+
+    bool append(PyObjectPtr item) { return PyList_Append(obj.get(), item.get()) == 0; }
 };
 
 struct Tuple
@@ -232,6 +234,65 @@ bool toVector(PyObjectPtr obj, std::vector<double>& result)
     return knownType;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//////////////////////// Helper functions //////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+PyObjectPtr importModule(const std::string& module)
+{
+  PyObjectPtr pyModuleName = String::make(module).obj;
+  throwPythonException();
+  PyObjectPtr pyModule = makePyObjectPtr(PyImport_Import(pyModuleName.get()));
+  throwPythonException();
+  return pyModule;
+}
+
+PyObjectPtr getAttribute(PyObjectPtr obj, const std::string& attribute)
+{
+    PyObjectPtr pyAttr = makePyObjectPtr(PyObject_GetAttrString(
+        obj.get(), attribute.c_str()));
+    throwPythonException();
+    return pyAttr;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//////////////////////// Implementation details ////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+struct ObjectState
+{
+    PyObjectPtr objectPtr;
+    std::shared_ptr<Method> currentMethod;
+};
+
+struct FunctionState
+{
+    std::string name;
+    PyObjectPtr functionPtr;
+    std::list<CppType> args;
+    PyObjectPtr result;
+};
+
+struct MethodState
+{
+    PyObjectPtr objectPtr;
+    std::string name;
+    std::list<CppType> args;
+    PyObjectPtr result;
+};
+
+struct ModuleState
+{
+    PyObjectPtr modulePtr;
+    std::shared_ptr<Function> currentFunction;
+    std::shared_ptr<Object> currentVariable;
+};
+
+struct ListBuilderState
+{
+    std::list<CppType> types;
+};
+
 void toPyObjects(std::va_list& cppArgs, const std::list<CppType>& types, std::vector<PyObjectPtr>& args)
 {
     for(const CppType& t: types)
@@ -269,32 +330,17 @@ void toPyObjects(std::va_list& cppArgs, const std::list<CppType>& types, std::ve
             args.push_back(NdArray::make(*array).obj);
             break;
         }
+        case OBJECT:
+        {
+            Object* object = va_arg(cppArgs, Object*);
+            args.push_back(object->state->objectPtr);
+            break;
+        }
         default:
             throw std::runtime_error("Unknown function argument type");
         }
         throwPythonException();
     }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//////////////////////// Helper functions //////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-
-PyObjectPtr importModule(const std::string& module)
-{
-  PyObjectPtr pyModuleName = String::make(module).obj;
-  throwPythonException();
-  PyObjectPtr pyModule = makePyObjectPtr(PyImport_Import(pyModuleName.get()));
-  throwPythonException();
-  return pyModule;
-}
-
-PyObjectPtr getAttribute(PyObjectPtr obj, const std::string& attribute)
-{
-    PyObjectPtr pyAttr = makePyObjectPtr(PyObject_GetAttrString(
-        obj.get(), attribute.c_str()));
-    throwPythonException();
-    return pyAttr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -320,34 +366,15 @@ const PythonInterpreter& PythonInterpreter::instance()
     return pythonInterpreter;
 }
 
-struct ObjectState
+void PythonInterpreter::addToPythonpath(const std::string& path) const
 {
-    PyObjectPtr objectPtr;
-    std::shared_ptr<Method> currentMethod;
-};
-
-struct FunctionState
-{
-    std::string name;
-    PyObjectPtr functionPtr;
-    std::list<CppType> args;
-    PyObjectPtr result;
-};
-
-struct MethodState
-{
-    PyObjectPtr objectPtr;
-    std::string name;
-    std::list<CppType> args;
-    PyObjectPtr result;
-};
-
-struct ModuleState
-{
-    PyObjectPtr modulePtr;
-    std::shared_ptr<Function> currentFunction;
-    std::shared_ptr<Object> currentVariable;
-};
+    PyObjectPtr pythonpath = import("sys")->variable("path").state->objectPtr;
+    PyObjectPtr entry = String::make(path).obj;
+    int res = PyList_Append(pythonpath.get(), entry.get());
+    throwPythonException();
+    if(res != 0)
+        throw std::runtime_error("Could not append " + path + " to sys.path");
+}
 
 Object::Object(std::shared_ptr<ObjectState> state)
     : state(state)
@@ -362,7 +389,8 @@ Method& Object::method(const std::string& name)
 
 std::shared_ptr<std::vector<double> > Object::as1dArray()
 {
-    auto array = std::make_shared<std::vector<double> >();
+    std::shared_ptr<std::vector<double> > array =
+        std::make_shared<std::vector<double> >();
     const bool knownType = toVector(state->objectPtr, *array);
     if(!knownType)
         throw std::runtime_error("Object is not a sequence of doubles");
@@ -413,12 +441,12 @@ Function& Function::call(...)
 {
     const size_t argc = state->args.size();
 
-    std::va_list vaList;
-    va_start(vaList, this);
-
     std::vector<PyObjectPtr> args;
     args.reserve(argc);
+    std::va_list vaList;
+    va_start(vaList, this);
     toPyObjects(vaList, state->args, args);
+    va_end(vaList);
 
     switch(argc)
     {
@@ -448,7 +476,8 @@ Function& Function::call(...)
 
 std::shared_ptr<Object> Function::returnObject()
 {
-    auto objectState = std::shared_ptr<ObjectState>(new ObjectState{state->result});
+    std::shared_ptr<ObjectState> objectState = std::shared_ptr<ObjectState>(
+        new ObjectState{state->result});
     return std::make_shared<Object>(objectState);
 }
 
@@ -468,12 +497,12 @@ Method& Method::call(...)
 {
     const size_t argc = state->args.size();
 
-    std::va_list vaList;
-    va_start(vaList, this);
-
     std::vector<PyObjectPtr> args;
     args.reserve(argc);
+    std::va_list vaList;
+    va_start(vaList, this);
     toPyObjects(vaList, state->args, args);
+    va_end(vaList);
 
     // For the characters that describe the argument type, see
     // https://docs.python.org/2/c-api/arg.html#c.Py_BuildValue
@@ -512,7 +541,8 @@ Method& Method::call(...)
 
 std::shared_ptr<Object> Method::returnObject()
 {
-    auto objectState = std::shared_ptr<ObjectState>(new ObjectState{state->result});
+    std::shared_ptr<ObjectState> objectState = std::shared_ptr<ObjectState>(
+        new ObjectState{state->result});
     return std::make_shared<Object>(objectState);
 }
 
@@ -530,23 +560,55 @@ Function& Module::function(const std::string& name)
 
 Object& Module::variable(const std::string& name)
 {
-    auto objectState = std::shared_ptr<ObjectState>(
+    std::shared_ptr<ObjectState> objectState = std::shared_ptr<ObjectState>(
         new ObjectState{getAttribute(state->modulePtr, name)});
     state->currentVariable = std::make_shared<Object>(objectState);
     return *state->currentVariable;
 }
 
-void PythonInterpreter::addToPythonpath(const std::string& path) const
-{
-    PyObjectPtr pythonpath = import("sys")->variable("path").state->objectPtr;
-    PyObjectPtr entry = String::make(path).obj;
-    int res = PyList_Append(pythonpath.get(), entry.get());
-    throwPythonException();
-    if(res != 0)
-        throw std::runtime_error("Could not append " + path + " to sys.path");
-}
-
 std::shared_ptr<Module> PythonInterpreter::import(const std::string& name) const
 {
     return std::make_shared<Module>(name);
+}
+
+std::shared_ptr<ListBuilder> PythonInterpreter::listBuilder() const
+{
+    return std::make_shared<ListBuilder>();
+}
+
+ListBuilder::ListBuilder()
+    : state(new ListBuilderState)
+{
+}
+
+ListBuilder& ListBuilder::pass(CppType type)
+{
+    state->types.push_back(type);
+    return *this;
+}
+
+std::shared_ptr<Object> ListBuilder::build(...)
+{
+    const size_t argc = state->types.size();
+
+    std::vector<PyObjectPtr> args;
+    args.reserve(argc);
+    std::va_list vaList;
+    va_start(vaList, this);
+    toPyObjects(vaList, state->types, args);
+    va_end(vaList);
+
+    List list = List::make();
+    for(PyObjectPtr& object: args)
+    {
+        list.append(object);
+        throwPythonException();
+    }
+
+    state->types.clear();
+
+    throwPythonException();
+    std::shared_ptr<ObjectState> objectState = std::shared_ptr<ObjectState>(
+        new ObjectState{list.obj});
+    return std::make_shared<Object>(objectState);
 }

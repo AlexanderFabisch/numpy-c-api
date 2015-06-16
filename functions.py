@@ -44,3 +44,6 @@ def multiple_io(a, b):
 
 def raise_import_error():
     import bla
+
+def print_list(l):
+    print(l)

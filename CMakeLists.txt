@@ -25,3 +25,6 @@ target_link_libraries(hello_world ${PYTHON_LIBRARIES})
 
 add_executable(import_error import_error.cpp python_interpreter.cpp)
 target_link_libraries(import_error ${PYTHON_LIBRARIES})
+
+add_executable(pass_pylist pass_pylist.cpp python_interpreter.cpp)
+target_link_libraries(pass_pylist ${PYTHON_LIBRARIES})
