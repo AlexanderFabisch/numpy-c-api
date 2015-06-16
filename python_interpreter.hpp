@@ -11,6 +11,7 @@ struct FunctionState;
 struct MethodState;
 struct ModuleState;
 class Object;
+class ListObject;
 class Function;
 class Method;
 class Module;
@@ -45,6 +46,15 @@ public:
     int asInt();
     bool asBool();
     std::string asString();
+    std::shared_ptr<ListObject> asList();
+};
+
+class ListObject
+{
+    friend PythonInterpreter;
+    std::shared_ptr<ObjectState> state;
+public:
+    ListObject(std::shared_ptr<ObjectState> state);
 };
 
 // TODO Function and Method may contain duplicate code

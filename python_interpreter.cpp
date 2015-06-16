@@ -349,6 +349,11 @@ struct ModuleState
     std::shared_ptr<Object> currentVariable;
 };
 
+ListObject::ListObject(std::shared_ptr<ObjectState> state)
+    : state(state)
+{
+}
+
 Object::Object(std::shared_ptr<ObjectState> state)
     : state(state)
 {
@@ -395,6 +400,11 @@ std::string Object::asString()
     const std::string result = String{state->objectPtr}.get();
     throwPythonException();
     return result;
+}
+
+std::shared_ptr<ListObject> Object::asList()
+{
+    return std::make_shared<ListObject>(state);
 }
 
 Function::Function(ModuleState& module, const std::string& name)
